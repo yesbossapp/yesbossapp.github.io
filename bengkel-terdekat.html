@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bengkel Terdekat</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --background-color: #f8f9fa;
+            --card-background: #ffffff;
+            --text-color: #333;
+            --border-color: #e9ecef;
+            --shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        header h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        #loader {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: var(--secondary-color);
+            display: block; /* Loader terlihat saat pertama kali dan saat memuat data baru */
+        }
+        .workshop-list {
+            display: grid;
+            gap: 20px;
+        }
+        .workshop-card {
+            background-color: var(--card-background);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .workshop-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+        .card-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+            color: var(--text-color);
+        }
+        .distance {
+            background-color: #e7f3ff;
+            color: var(--primary-color);
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .card-body p {
+            margin: 8px 0;
+            color: var(--secondary-color);
+            line-height: 1.6;
+        }
+        .card-body p.type {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .card-body p.address::before,
+        .card-body p.phone::before {
+            content: '📍 ';
+            margin-right: 5px;
+        }
+        .card-body p.phone::before {
+            content: '📞 ';
+        }
+        .card-footer {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+        .card-footer a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .card-footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Daftar Bengkel Terdekat</h1>
+        </header>
+
+        <main id="workshop-container">
+            <div id="workshop-list" class="workshop-list"></div>
+            <div id="loader">🗺️ Sebentar ya... Kami sedang mencari lokasimu, biar layanan kami lebih tepat sasaran 😊</div>
+        </main>
+    </div>
+
+    <template id="workshop-card-template">
+        <div class="workshop-card">
+            <div class="card-header">
+                <h2 class="name"></h2>
+                <span class="distance"></span>
+            </div>
+            <div class="card-body">
+                <p class="type"></p>
+                <p class="address"></p>
+                <p class="phone"></p>
+            </div>
+            <div class="card-footer">
+                <a class="gmaps-link" href="#" target="_blank" rel="noopener noreferrer">Lihat di Google Maps</a>
+            </div>
+        </div>
+    </template>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loader = document.getElementById('loader');
+            const listContainer = document.getElementById('workshop-list');
+            const cardTemplate = document.getElementById('workshop-card-template');
+
+            // Variabel untuk mengelola status loading dan halaman
+            let isLoading = false;
+            let offset = 1; // Mulai dari offset 1
+            const limit = 5; // Muat 5 item setiap kali
+            let hasMoreData = true; // Asumsikan masih ada data untuk dimuat
+
+            let latitude;
+            let longitude;
+
+            // Fungsi untuk mengambil dan menampilkan data
+            async function fetchWorkshops() {
+                // Jangan jalankan jika sedang loading atau sudah tidak ada data
+                if (isLoading || !hasMoreData) return;
+
+                isLoading = true;
+                loader.style.display = 'block'; // Tampilkan loader
+
+                // Bangun URL dengan parameter limit dan offset yang dinamis
+                const baseUrl = 'https://script.google.com/macros/s/AKfycbzuJ8tcSl31SAJtwQzagIuv1vV2FYTSUacUrLfmFUpgaUor4aFeN7pM4YsMBNyHFC22/exec';
+                const params = new URLSearchParams({
+                    deviceid: '23E23D23D',
+                    latitude: latitude,
+                    longitude: longitude,
+                    kota: 'sidoarjo',
+                    distance_max: 5000,
+                    limit: limit,
+                    offset: offset
+                });
+                
+                const apiUrl = `${baseUrl}?${params.toString()}`;
+
+                try {
+                    const response = await fetch(apiUrl);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    
+                    const data = await response.json();
+
+                    if (data.result && data.result.list && data.result.list.length > 0) {
+                        // Tambahkan data baru ke list
+                        data.result.list.forEach(workshop => {
+                            const cardClone = cardTemplate.content.cloneNode(true);
+                            
+                            cardClone.querySelector('.name').textContent = workshop.name || 'Nama Tidak Tersedia';
+                            cardClone.querySelector('.type').textContent = workshop.type || 'Tipe Tidak Diketahui';
+                            cardClone.querySelector('.address').textContent = workshop.address || 'Alamat tidak tersedia.';
+                            cardClone.querySelector('.phone').textContent = workshop.phone || 'Telepon tidak tersedia.';
+                            
+                            const distanceInKm = workshop.distance / 1000;
+                            cardClone.querySelector('.distance').textContent = `${distanceInKm.toFixed(2)} km`;
+                            
+                            const mapsUrl = `https://maps.google.com/?q=${workshop.latitude},${workshop.longitude}`;
+                            cardClone.querySelector('.gmaps-link').href = mapsUrl;
+
+                            listContainer.appendChild(cardClone);
+                        });
+
+                        // Perbarui offset untuk request berikutnya
+                        offset += limit;
+                        
+                        // Jika data yang kembali kurang dari limit, tandai sudah tidak ada data lagi
+                        if (data.result.list.length < limit) {
+                           hasMoreData = false;
+                           loader.textContent = 'Semua bengkel telah ditampilkan.';
+                        }
+
+                    } else {
+                        // Jika tidak ada data sama sekali atau list kosong
+                        hasMoreData = false;
+                        if (offset === 1) {
+                            loader.textContent = 'Tidak ada bengkel yang ditemukan.';
+                        } else {
+                            loader.textContent = 'Semua bengkel telah ditampilkan.';
+                        }
+                    }
+
+                } catch (error) {
+                    console.error('Error fetching data:', error);
+                    loader.textContent = 'Gagal memuat data.';
+                    loader.style.color = 'red';
+                } finally {
+                    isLoading = false; // Proses loading selesai
+                    // Sembunyikan loader jika sudah tidak ada data
+                    if (!hasMoreData) {
+                       // Biarkan tulisan "Semua bengkel telah ditampilkan" tetap ada
+                    } else {
+                       loader.style.display = 'none';
+                    }
+                }
+            }
+
+            // Fungsi untuk mengecek posisi scroll
+            function handleScroll() {
+                // (window.innerHeight + window.scrollY) = posisi bawah layar pengguna
+                // document.documentElement.offsetHeight = tinggi total halaman
+                if ((window.innerHeight + window.scrollY) >= document.documentElement.offsetHeight - 100) {
+                    fetchWorkshops(); // Panggil fungsi fetch jika sudah di dekat bawah
+                }
+            }
+
+            function onErrorLokasi(error) {
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        console.log("User menolak permintaan lokasi.");
+                        alert("Akses lokasi ditolak 😞😓🙏🏻\n\nKami memerlukan akses lokasi untuk menampilkan informasi yang relevan di sekitar Anda. Silakan izinkan lokasi dari pengaturan browser jika ingin menggunakan fitur ini.");
+                    break;
+                    case error.POSITION_UNAVAILABLE:
+                        console.log("Informasi lokasi tidak tersedia.");
+                        alert("❌ Gagal mendapatkan lokasi.\n\nSilakan coba lagi atau periksa koneksi dan pengaturan perangkat Anda.");
+                    break;
+                    case error.TIMEOUT:
+                        console.log("Permintaan lokasi melebihi batas waktu.");
+                        alert("⚠️ Gagal mendapatkan lokasi.\n\nSilakan coba lagi atau periksa koneksi dan pengaturan perangkat Anda.");
+                    break;
+                    default:
+                        console.log("Terjadi error tidak diketahui.");
+                        alert("💔 Gagal mendapatkan lokasi.\n\nSilakan coba lagi atau periksa koneksi dan pengaturan perangkat Anda.");
+                }
+            }
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        console.log('position', position);
+
+                        if (position.coords.accuracy > 100) {
+                            alert("Yaaah.. Lokasi mu kurang akurat. 🤔\nCoba aktifkan GPS atau pindah ke area terbuka👌");
+                        } else {
+                            latitude = position.coords.latitude;
+                            longitude = position.coords.longitude; 
+
+                            // Tambahkan event listener untuk scroll
+                            window.addEventListener('scroll', handleScroll);
+
+                            // Panggil fungsi untuk memuat data pertama kali
+                            fetchWorkshops();
+                        }
+                    },
+                    (error) => {
+                        console.error('onErrorLokasi', error);
+                        onErrorLokasi(error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 15000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                alert("😔 Sayang sekali browser Anda tidak mendukung fitur lokasi.");
+            }
+
+        });
+    </script>
+
+</body>
+</html>
